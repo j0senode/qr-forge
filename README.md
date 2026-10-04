@@ -173,6 +173,4 @@ This keeps updates easy to review and reduces the chance of unrelated changes be
 - qrcode
 - Lucide React
 
-## License
 
-No license has been selected yet. Add a license before reusing or distributing this project outside the repository owner's intended use.
