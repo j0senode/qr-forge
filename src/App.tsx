@@ -127,6 +127,7 @@ const phonePattern = /^\+?[0-9\s().-]{7,24}$/;
 const hexPattern = /^#?[0-9a-f]{3}([0-9a-f]{3})?$/i;
 const maxLogoBytes = 2 * 1024 * 1024;
 const brandImage = "/qr-code.svg";
+const siteOrigin = "https://qrcode-bycj.vercel.app";
 
 function escapeWifi(value: string) {
   return value.replace(/([\\;,":])/g, "\\$1");
@@ -347,6 +348,42 @@ function inputClass(hasError = false) {
   }`;
 }
 
+function upsertMeta(attribute: "name" | "property", key: string, content: string) {
+  const selector = `meta[${attribute}="${key}"]`;
+  const meta = document.querySelector<HTMLMetaElement>(selector) ?? document.createElement("meta");
+  meta.setAttribute(attribute, key);
+  meta.content = content;
+  if (!meta.parentElement) document.head.appendChild(meta);
+}
+
+function upsertJsonLd(id: string, data: object) {
+  const schema = document.getElementById(id) ?? document.createElement("script");
+  schema.id = id;
+  schema.setAttribute("type", "application/ld+json");
+  schema.textContent = JSON.stringify(data);
+  if (!schema.parentElement) document.head.appendChild(schema);
+}
+
+function getFaqItems(page: string) {
+  if (page === "Wi-Fi QR Code Generator") {
+    return [
+      ["What security type should I choose?", "Choose the one your router uses. WPA/WPA2 is the most common. Open networks need no password, and WEP is outdated."],
+      ["Does the QR code stop working if I change my password?", "Yes. The password is stored inside the code, so you need to create a new one after changing it."],
+      ["Will it work on iPhone and Android?", "Yes on current versions of both using the camera. Older phones may need a scanner app."],
+      ["Is my Wi-Fi password sent anywhere?", "No. The code is generated in your browser and this app has no backend."],
+    ];
+  }
+
+  return [
+    ["Is this QR code generator free?", "Yes. It is free to use, with no watermark and no sign-up required."],
+    ["Do the QR codes expire?", "No. These are static QR codes, so they keep working as long as the destination or embedded information remains valid."],
+    ["Is my data sent to a server?", "No. The code is generated in your browser and this app has no backend."],
+    ["What is the difference between PNG and SVG?", "PNG is a pixel image for screens and documents. SVG is a vector file that stays sharp at any size, making it better for print."],
+    ["What does error correction mean?", "Error correction helps a QR code scan if part of it is damaged, dirty, or covered by a small logo. Higher levels make denser codes."],
+    ["Why won't my QR code scan?", "Common causes are low contrast, no blank border, printing too small, or a logo covering too much of the center."],
+  ];
+}
+
 function App() {
   const route = window.location.pathname.replace(/\/$/, "") || "/";
   const initialKind: QrKind =
@@ -416,44 +453,64 @@ function App() {
   }, [route]);
 
   useEffect(() => {
+    const canonicalUrl = `${siteOrigin}${window.location.pathname.replace(/\/$/, "") || "/"}`;
+    const imageUrl = `${siteOrigin}${brandImage}`;
+
     document.title = pageCopy.title;
-    const description = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (description) description.content = pageCopy.description;
+    upsertMeta("name", "description", pageCopy.description);
+    upsertMeta("name", "robots", "index, follow");
+    upsertMeta("name", "googlebot", "index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1");
+    upsertMeta("property", "og:site_name", "QR Forge");
+    upsertMeta("property", "og:type", "website");
+    upsertMeta("property", "og:title", pageCopy.title);
+    upsertMeta("property", "og:description", pageCopy.description);
+    upsertMeta("property", "og:url", canonicalUrl);
+    upsertMeta("property", "og:image", imageUrl);
+    upsertMeta("name", "twitter:card", "summary");
+    upsertMeta("name", "twitter:title", pageCopy.title);
+    upsertMeta("name", "twitter:description", pageCopy.description);
+    upsertMeta("name", "twitter:image", imageUrl);
+
     const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]') ?? document.createElement("link");
     canonical.rel = "canonical";
-    canonical.href = window.location.href;
+    canonical.href = canonicalUrl;
     if (!canonical.parentElement) document.head.appendChild(canonical);
-    document.getElementById("faq-schema")?.remove();
-    const schema = document.createElement("script");
-    schema.id = "faq-schema";
-    schema.type = "application/ld+json";
-    schema.textContent = JSON.stringify({
+
+    upsertJsonLd("web-application-schema", {
       "@context": "https://schema.org",
-      "@type": "FAQPage",
-      mainEntity: [
-        {
-          "@type": "Question",
-          name: "Is this QR code generator free?",
-          acceptedAnswer: { "@type": "Answer", text: "Yes. It is free to use, with no watermark and no sign-up required." },
-        },
-        {
-          "@type": "Question",
-          name: "Do the QR codes expire?",
-          acceptedAnswer: { "@type": "Answer", text: "No. These are static QR codes, so they keep working as long as the destination remains valid." },
-        },
-        {
-          "@type": "Question",
-          name: "Is my data sent to a server?",
-          acceptedAnswer: { "@type": "Answer", text: "No. The code is generated in your browser and this app has no backend." },
-        },
-        {
-          "@type": "Question",
-          name: "What is the difference between PNG and SVG?",
-          acceptedAnswer: { "@type": "Answer", text: "PNG is a pixel image for screens. SVG is a vector file that stays sharp at any size." },
-        },
+      "@type": "WebApplication",
+      name: "QR Forge",
+      url: canonicalUrl,
+      description: pageCopy.description,
+      applicationCategory: "UtilityApplication",
+      operatingSystem: "Any",
+      isAccessibleForFree: true,
+      image: imageUrl,
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+      },
+      featureList: [
+        "Static QR code generation",
+        "PNG export",
+        "SVG export",
+        "Wi-Fi QR codes",
+        "vCard QR codes",
+        "Email QR codes",
+        "Logo upload",
       ],
     });
-    document.head.appendChild(schema);
+
+    upsertJsonLd("faq-schema", {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: getFaqItems(pageCopy.h1).map(([question, answer]) => ({
+        "@type": "Question",
+        name: question,
+        acceptedAnswer: { "@type": "Answer", text: answer },
+      })),
+    });
   }, [pageCopy]);
 
   useEffect(() => {
